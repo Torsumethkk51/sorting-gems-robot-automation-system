@@ -1,4 +1,4 @@
-# ========== VISION CLEANSING ==========
+# ========== ARUCO TRACKING ==========
 
 import cv2
 import numpy as np
