@@ -159,4 +159,6 @@ def color_filtering(image: cv2.typing.MatLike):
 
     cv2.destroyAllWindows()
 
+    return current_color_range
+
 # ====================================
