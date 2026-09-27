@@ -7,6 +7,7 @@ from lib import color_filtering as cf
 from lib import object_detector as od
 from lib import obstacles_detector as obs
 from lib import obstacles_visualization as obsv
+from lib import pathfinding as pf
 
 if __name__ == "__main__":
     image = cv2.imread("test-image/field.png")
@@ -36,8 +37,22 @@ if __name__ == "__main__":
         # overlay obstacles onto annotated image
         annotated_img = obsv.draw_obstacles(annotated_img, raw_walls, inflated_walls)
 
-        # show all detected gems, drop zones, and safety walls
-        cv2.imshow("Detected Objects and Obstacles", annotated_img)
+        if robot is not None and "green" in drop_zones:
+            start_pos = robot["center"]
+            target_pos = drop_zones["green"]
+
+            # 1.find path using a* on the inflated obstacle mask
+            raw_path = pf.astar_search(inflated_walls, start_pos, target_pos, step_size=15)
+            waypoints = pf.prune_waypoints(raw_path, min_dist=40.0)
+
+            # 2.draw path lines and waypoints
+            if waypoints:
+                for i in range(len(waypoints) - 1):
+                    cv2.line(annotated_img, waypoints[i], waypoints[i+1], (0, 255, 0), 3)
+                for pt in waypoints:
+                    cv2.circle(annotated_img, pt, 5, (255, 0, 0), -1)
+
+        cv2.imshow("A* Navigation Result", annotated_img)
         cv2.waitKey(0)
         cv2.destroyAllWindows()
         
