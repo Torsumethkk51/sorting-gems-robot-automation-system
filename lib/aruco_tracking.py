@@ -4,100 +4,86 @@ import cv2
 import numpy as np
 
 def find_aruco(image: cv2.typing.MatLike):
-    # Check for the image
+    # check for the image
     if image is None:
-        print("Not found the marker")
+        print("not found the image")
+        return None, None
 
-    # Load the arUco marker which has a size be 4 x 4 grid and marker id 0-99 (All 100 patterns)
+    # load the aruco marker dictionary (4x4, 100 markers)
     aruco_dict = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_4X4_100)
-    # Load a config for finding algorithm
+    # load parameters for marker detection
     parameters = cv2.aruco.DetectorParameters()
-    # Create a detector that can detect 4 x 4 grid arUco marker id 0-99 and load with default config
+    # create aruco detector instance
     detector = cv2.aruco.ArucoDetector(aruco_dict, parameters)
 
-    # Turn image to gray-scale help program find the marker easier
+    # turn image to grayscale to help detector process faster
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
 
-    # Find aruco marker
-    # corners : keep for all corners of marker program founded
-    # ids : keep for all marker id of marker program founed
-    # _ (rejected) : keep for all the markers proram can't decode its bits code
+    # detect markers
     corners, ids, _ = detector.detectMarkers(gray)
-
     return corners, ids
 
-def aruco_tracker(image: cv2.typing.MatLike):
+def aruco_tracker(image: cv2.typing.MatLike, target_id: int = None):
     corners, ids = find_aruco(image)
 
-    # If program founded at least one marker in image
-    if ids is not None:
-        # Make array ids to 1 dimension and use zip pairing each id with its corner position
-        # ex ids = [[43], [12]] -> ids = [43, 12] then pair id with its corner position
-        for marker_id, marker_corners in zip(ids.flatten(), corners):
-            # Four corners point ordered: top-left to top-right to bottom-right to bottom-left
-            # Reshape function makes corners become a array with 4 rows and each row has two columns 
-            pts = marker_corners.reshape((4, 2))
-            tl, _, _, bl = pts
+    # if no markers are detected in the image
+    if ids is None:
+        return None
 
-            # Find average of x and y position those are the center coordinate
-            # pts[:, 0] means use every rows data at index 0 only (x-coordinate)
-            cx = int(np.mean(pts[:, 0]))
-            # pts[:, 1] means use every rows data at index 1 only (y-coordinate)
-            cy = int(np.mean(pts[:, 1]))
+    # flatten ids array
+    flat_ids = ids.flatten()
 
-            # Top corner vector from bottom-left to top-left
-            dx = tl[0] - bl[0]
-            dy = tl[1] - bl[1]
+    for marker_id, marker_corners in zip(flat_ids, corners):
+        # if target_id is specified, ignore other markers
+        if target_id is not None and marker_id != target_id:
+            continue
 
+        # reshape corners into 4 points
+        pts = marker_corners.reshape((4, 2))
+        tl, tr, br, bl = pts
 
-            theta_rad = np.arctan2(dy, dx)
-            theta_deg = np.degrees(theta_rad)
+        # find center coordinate using mean
+        cx = int(np.mean(pts[:, 0]))
+        cy = int(np.mean(pts[:, 1]))
 
-            # calculate the end point of the line 
-            line_length = 50
-            end_x = int(cx + line_length * np.cos(theta_rad))
-            end_y = int(cy + line_length * np.sin(theta_rad))
+        # calculate forward direction vector from bottom-left to top-left
+        dx = tl[0] - bl[0]
+        dy = tl[1] - bl[1]
 
-            # draw a red line
-            cv2.line(image, (cx, cy), (end_x, end_y), (0, 0, 255), 2)
+        # calculate heading angle in radians
+        theta_rad = np.arctan2(dy, dx)
 
-            print(f"Marker ID: {marker_id}")
-            print(f"Position (X, Y): ({cx}, {cy}) pixels")
-            print(f"Theta: {theta_deg:.2f}° ({theta_rad:.4f} rad)\n")
+        # return structured data for downstream tasks
+        # robot_pose format: (cx, cy, theta_rad)
+        return {
+            "id": int(marker_id),
+            "center": (cx, cy),
+            "theta_rad": float(theta_rad),
+            "theta_deg": float(np.degrees(theta_rad)),
+            "corners": pts
+        }
 
-            # draw a circle on the center of marker
-            cv2.aruco.drawDetectedMarkers(image, corners)
-            cv2.circle(image, (cx, cy), 5, (0, 0, 255), -1)
-
-        cv2.imshow("test", image)
-        cv2.waitKey(0)
-        cv2.destroyAllWindows()
-
-
-def get_scale_factor(image: cv2.typing.MatLike, physical_aruco_size):
-    corners, ids = find_aruco(image)
-
-    # If program founded at least one marker in image
-    if ids is not None:
-        # Make array ids to 1 dimension and use zip pairing each id with its corner position
-        # ex ids = [[43], [12]] -> ids = [43, 12] then pair id with its corner position
-        for marker_id, marker_corners in zip(ids.flatten(), corners):
-            # Four corners point ordered: top-left to top-right to bottom-right to bottom-left
-            # Reshape function makes corners become a array with 4 rows and each row has two columns 
-            pts = marker_corners.reshape((4, 2))
-            tl, tr, br, bl = pts
-    
-            # get the pixel size each side from Euclidian distance and use the average to reduce the noise
-            d_top = np.linalg.norm(tr - tl)
-            d_right = np.linalg.norm(br - tr)
-            d_bottom = np.linalg.norm(bl - br)
-            d_left = np.linalg.norm(tl - bl)
-            side_in_pixel = (d_top + d_right + d_bottom + d_left) / 4.0
-
-            # return the ratio between pixel and physical size
-            return side_in_pixel / physical_aruco_size
-
-    # If there is no trackable marker in the frame
     return None
 
-# ====================================== 
+def get_scale_factor(image: cv2.typing.MatLike, physical_aruco_size: float):
+    corners, ids = find_aruco(image)
+
+    if ids is not None:
+        # take the first detected marker to calculate scale
+        pts = corners[0].reshape((4, 2))
+        tl, tr, br, bl = pts
+
+        # get side length in pixels
+        d_top = np.linalg.norm(tr - tl)
+        d_right = np.linalg.norm(br - tr)
+        d_bottom = np.linalg.norm(bl - br)
+        d_left = np.linalg.norm(tl - bl)
+        side_in_pixel = (d_top + d_right + d_bottom + d_left) / 4.0
+
+        # return pixels per physical unit (e.g., px/mm)
+        scale_px_per_unit = side_in_pixel / physical_aruco_size
+        return scale_px_per_unit
+
+    return None
+
+# ======================================

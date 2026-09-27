@@ -14,7 +14,7 @@ if __name__ == "__main__":
     if image is not None:
         cropped_image = vc.vision_cleansing(image=field_with_drop_zone)
         at.aruco_tracker(image=cropped_image)
-        print(at.get_scale_factor(image=cropped_image, physical_aruco_size=8))
+        scale_factor = at.get_scale_factor(image=cropped_image, physical_aruco_size=8)
 
         current_color_range = cf.color_filtering(image=cropped_image)
 
