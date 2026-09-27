@@ -20,24 +20,49 @@ def heuristic(a, b):
     # euclidean distance heuristic
     return math.hypot(b[0] - a[0], b[1] - a[1])
 
-def astar_search(grid: np.ndarray, start_px: tuple, goal_px: tuple, step_size: int = 15):
-    # 1.downscale pixel coordinates to grid coordinates
-    start_grid = (int(round(start_px[0] / step_size)), int(round(start_px[1] / step_size)))
-    goal_grid = (int(round(goal_px[0] / step_size)), int(round(goal_px[1] / step_size)))
+def find_nearest_free_grid(grid: np.ndarray, grid_pos: tuple, max_gx: int, max_gy: int, step_size: int):
+    gx, gy = grid_pos
+    gh, gw = grid.shape
 
+    # check if current point is free
+    px = min(int(gx * step_size), gw - 1)
+    py = min(int(gy * step_size), gh - 1)
+    if grid[py, px] == 0:
+        return grid_pos
+
+    # expanding search to find nearest open walkable space
+    for r in range(1, 30):
+        for dx in range(-r, r + 1):
+            for dy in range(-r, r + 1):
+                nx, ny = gx + dx, gy + dy
+                if 0 <= nx < max_gx and 0 <= ny < max_gy:
+                    cpx = min(int(nx * step_size), gw - 1)
+                    cpy = min(int(ny * step_size), gh - 1)
+                    if grid[cpy, cpx] == 0:
+                        return (nx, ny)
+    return grid_pos
+
+def astar_search(grid: np.ndarray, start_px: tuple, goal_px: tuple, step_size: int = 10):
     gh, gw = grid.shape
     max_gx = int(gw // step_size)
     max_gy = int(gh // step_size)
 
-    # 2.initialize open and closed sets
+    # 1.downscale pixel coordinates to grid coordinates
+    start_grid = (int(round(start_px[0] / step_size)), int(round(start_px[1] / step_size)))
+    goal_grid = (int(round(goal_px[0] / step_size)), int(round(goal_px[1] / step_size)))
+
+    # snap to valid walkable cells if submerged in obstacles
+    start_grid = find_nearest_free_grid(grid, start_grid, max_gx, max_gy, step_size)
+    goal_grid = find_nearest_free_grid(grid, goal_grid, max_gx, max_gy, step_size)
+
+    # 2.initialize open heap and visited dictionary
     open_heap = []
     start_node = Node(start_grid, None, 0.0, heuristic(start_grid, goal_grid))
     heapq.heappush(open_heap, start_node)
     
-    # dictionary to keep track of lowest g cost found so far for each grid cell
     visited_g = {start_grid: 0.0}
 
-    # 8-directional motion vectors: (dx, dy, step_cost)
+    # 8-directional motion
     directions = [
         (1, 0, 1.0), (-1, 0, 1.0), (0, 1, 1.0), (0, -1, 1.0),
         (1, 1, 1.414), (1, -1, 1.414), (-1, 1, 1.414), (-1, -1, 1.414)
@@ -49,12 +74,10 @@ def astar_search(grid: np.ndarray, start_px: tuple, goal_px: tuple, step_size: i
     while open_heap:
         current = heapq.heappop(open_heap)
 
-        # check if goal reached
         if current.pos == goal_grid:
             found_node = current
             break
 
-        # skip node if we already discovered a cheaper route to it
         if current.g > visited_g.get(current.pos, float('inf')):
             continue
 
@@ -62,13 +85,11 @@ def astar_search(grid: np.ndarray, start_px: tuple, goal_px: tuple, step_size: i
             nx = current.pos[0] + dx
             ny = current.pos[1] + dy
 
-            # check boundary limits
             if not (0 <= nx < max_gx and 0 <= ny < max_gy):
                 continue
 
-            # check obstacle collision on inflated grid
-            px = int(nx * step_size)
-            py = int(ny * step_size)
+            px = min(int(nx * step_size), gw - 1)
+            py = min(int(ny * step_size), gh - 1)
             if grid[py, px] > 0:
                 continue
 
@@ -81,7 +102,7 @@ def astar_search(grid: np.ndarray, start_px: tuple, goal_px: tuple, step_size: i
                 neighbor_node = Node(next_pos, current, new_g, h_cost)
                 heapq.heappush(open_heap, neighbor_node)
 
-    # 4.reconstruct path from target to start
+    # 4.reconstruct path
     if found_node is None:
         return []
 
@@ -92,12 +113,11 @@ def astar_search(grid: np.ndarray, start_px: tuple, goal_px: tuple, step_size: i
         curr = curr.parent
     grid_path.reverse()
 
-    # 5.convert grid path back into full-resolution pixel coordinates
+    # 5.convert to full pixel coordinates
     pixel_path = [(int(gx * step_size), int(gy * step_size)) for gx, gy in grid_path]
     return pixel_path
 
-def prune_waypoints(path: list, min_dist: float = 35.0):
-    # simplify dense path into sparser waypoints for smooth differential drive
+def prune_waypoints(path: list, min_dist: float = 25.0):
     if len(path) <= 2:
         return path
 
