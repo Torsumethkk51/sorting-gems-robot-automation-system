@@ -76,7 +76,7 @@ if __name__ == "__main__":
             print(f"Total Dist  : {total_cost:.1f} px")
             print(f"Remaining   : {total_remaining} gems")
 
-            # 3.render mission frame
+            # 3.render mission overview path
             mission_frame = gs.render_mission(
                 image=annotated_img,
                 robot_pos=current_robot_pos,
@@ -87,22 +87,22 @@ if __name__ == "__main__":
                 remaining_count=total_remaining
             )
 
-            cv2.imshow("Gem Sorting Autonomous Mission", mission_frame)
-            key = cv2.waitKey(0) & 0xFF
+            # 4.run real-time simulation motion
+            # combine pickup and drop paths seamlessly
+            full_route = pickup_path + drop_path[1:] if drop_path else pickup_path
+            
+            # robot physically animates along path
+            end_robot_pos = gs.simulate_robot_motion(
+                base_frame=mission_frame,
+                full_path=full_route,
+                speed_px=10.0,   # adjust speed of animation
+                delay_ms=10      # frame rate delay
+            )
 
-            # press 'q' or ESC to quit
-            if key == ord('q') or key == 27:
-                print("mission aborted by user.")
-                break
-
-            # press 'n' or SPACEBAR to finish current gem and proceed to next
-            elif key == ord('n') or key == 32:
-                # remove current gem from list
-                active_gems[target_color].remove(target_pos)
-
-                # update robot virtual position to the drop zone where it finished dropping
-                current_robot_pos = drop_pos
-                step_counter += 1
+            # remove collected gem and update robot start pos to actual stopped location
+            active_gems[target_color].remove(target_pos)
+            current_robot_pos = end_robot_pos
+            step_counter += 1
 
         cv2.destroyAllWindows()
         

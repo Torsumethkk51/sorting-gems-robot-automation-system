@@ -97,3 +97,66 @@ def render_mission(image: cv2.typing.MatLike, robot_pos: tuple, best_gem: dict, 
     cv2.putText(vis_img, "Press [N] for Next Gem | [Q] to Quit", (30, 96), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 1)
 
     return vis_img
+
+def draw_simulated_aruco(image: cv2.typing.MatLike, center: tuple, angle_rad: float, size: int = 40):
+    vis_img = image.copy()
+    cx, cy = int(center[0]), int(center[1])
+
+    # 1.create base square box for aruco body
+    half = size / 2.0
+    corners = np.array([
+        [-half, -half],
+        [half, -half],
+        [half, half],
+        [-half, half]
+    ], dtype=np.float32)
+
+    # 2.rotation matrix
+    rot_mat = np.array([
+        [np.cos(angle_rad), -np.sin(angle_rad)],
+        [np.sin(angle_rad),  np.cos(angle_rad)]
+    ])
+    rotated_corners = (corners @ rot_mat.T) + np.array([cx, cy])
+    pts = np.int32(rotated_corners)
+
+    # 3.draw aruco body (black border with pink/white fill)
+    cv2.fillPoly(vis_img, [pts], (20, 20, 20))
+    cv2.polylines(vis_img, [pts], True, (255, 0, 255), 2)
+
+    # 4.draw forward direction arrow (heading pointer)
+    arrow_len = size * 0.75
+    tip_x = int(cx + arrow_len * np.cos(angle_rad))
+    tip_y = int(cy + arrow_len * np.sin(angle_rad))
+    cv2.arrowedLine(vis_img, (cx, cy), (tip_x, tip_y), (0, 255, 255), 2, tipLength=0.35)
+
+    return vis_img
+
+def simulate_robot_motion(base_frame: cv2.typing.MatLike, full_path: list, speed_px: float = 8.0, delay_ms: int = 15):
+    if not full_path:
+        return full_path[0] if full_path else (0, 0)
+
+    current_pos = np.array(full_path[0], dtype=np.float32)
+    current_angle = 0.0
+
+    for target_pt in full_path[1:]:
+        target = np.array(target_pt, dtype=np.float32)
+        dist = np.linalg.norm(target - current_pos)
+
+        if dist > 1e-4:
+            current_angle = np.arctan2(target[1] - current_pos[1], target[0] - current_pos[0])
+
+        # move progressively towards target waypoint
+        while dist > speed_px:
+            unit_vec = (target - current_pos) / dist
+            current_pos += unit_vec * speed_px
+            dist = np.linalg.norm(target - current_pos)
+
+            sim_frame = draw_simulated_aruco(base_frame, (current_pos[0], current_pos[1]), current_angle)
+            cv2.imshow("Gem Sorting Autonomous Mission", sim_frame)
+            key = cv2.waitKey(delay_ms) & 0xFF
+            if key == 27 or key == ord('q'):
+                return (int(current_pos[0]), int(current_pos[1]))
+
+        current_pos = target
+
+    return (int(current_pos[0]), int(current_pos[1]))
