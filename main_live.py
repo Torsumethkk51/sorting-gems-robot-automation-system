@@ -15,8 +15,8 @@ from lib import gem_selector as gs
 from lib.esp32_controller import ESP32Client, track_waypoint_controller
 
 # --- CONFIGURATION ---
-ESP32_IP = "10.34.160.227"
-ESP32_PORT = 8888
+ESP32_IP = "Your IP"
+ESP32_PORT = 4210
 CAMERA_INDEX = 0
 BASE_SPEED = 135
 KP_GAIN = 85.0

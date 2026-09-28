@@ -15,7 +15,7 @@ from lib import obstacles_detector as obs
 from lib import gem_selector as gs
 
 # ตั้งค่าการเชื่อมต่อ ESP32
-ESP32_IP = "10.34.160.208"  # ใส่ IP ของบอร์ด ESP32
+ESP32_IP = "Your IP"  # ใส่ IP ของบอร์ด ESP32
 ESP32_PORT = 4210           # พอร์ต UDP ของ ESP32
 
 class DiscreteESP32Client:

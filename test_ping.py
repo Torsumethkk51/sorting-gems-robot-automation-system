@@ -1,7 +1,7 @@
 import socket
 import time
 
-ESP_IP = "10.34.160.208"
+ESP_IP = "Your IP"
 PORT = 4210
 
 sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
